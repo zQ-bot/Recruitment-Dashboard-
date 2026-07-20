@@ -19,13 +19,32 @@ export function PipelineView({ onOpenCandidate, searchQuery, statusFilter }: { o
   async function loadCandidates() {
     setLoading(true)
     const data = await getLiveCandidates()
-    setCandidates(data)
+    setCandidates(
+  data.map((candidate) => ({
+    ...candidate,
+    status:
+      candidate.status === "new"
+        ? "Applied"
+        : candidate.status,
+  }))
+)
     setLoading(false)
   }
 
   useEffect(() => {
     loadCandidates()
   }, [])
+  const filteredCandidates = candidates.filter((candidate) => {
+  const matchesSearch =
+    searchQuery === "" ||
+    candidate.candidateName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    candidate.appliedRole.toLowerCase().includes(searchQuery.toLowerCase())
+
+  const matchesStatus =
+    statusFilter === "All" || candidate.status === statusFilter
+
+  return matchesSearch && matchesStatus
+})
 
   async function handleStatusChange(applicationId: string, nextStatus: string) {
     const previous = candidates.find((candidate) => candidate.id === applicationId)
