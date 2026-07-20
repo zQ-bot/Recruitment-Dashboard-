@@ -1,15 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { Sparkles, FileDown, RefreshCw, Check, X, Hourglass, BrainCircuit } from "lucide-react"
-import {
-  candidates,
-  recommendationTone,
-  scoreTone,
-  toneClasses,
-  type Candidate,
-} from "@/lib/data"
+import { useEffect, useMemo, useState } from "react"
+import { Sparkles, FileDown, RefreshCw, Check, X, Hourglass, BrainCircuit, AlertCircle, ExternalLink } from "lucide-react"
+import { recommendationTone, scoreTone } from "@/lib/data"
 import { Avatar, Badge, BiasBadge, Card, PanelHead, RedactedName } from "@/components/ui-bits"
+import type { LiveCandidate } from "@/src/lib/live-candidate"
+import { analyzeResumeCandidate, buildFallbackAnalysis } from "@/src/lib/ai-scoring"
+import ResumePdfViewer from "@/components/views/resume-pdf-viewer"
+import { getLiveCandidates } from "@/src/actions/get-candidates.action"
 
 const toneStroke: Record<string, string> = {
   success: "var(--color-success)",
@@ -60,75 +58,107 @@ function MatchRow({ label, value, color }: { label: string; value: number; color
   )
 }
 
-function ResumeDoc({ c }: { c: Candidate }) {
-  const processed = c.aiScore !== null
+function ResumeDoc({ candidate, onRetry }: { candidate: LiveCandidate; onRetry: () => void }) {
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [errorKey, setErrorKey] = useState(0)
+  const [analysis, setAnalysis] = useState(() => buildFallbackAnalysis(candidate))
+
+  useEffect(() => {
+    setStatus("loading")
+    setAnalysis(buildFallbackAnalysis(candidate))
+
+    let ignore = false
+
+    async function runAnalysis() {
+      const result = await analyzeResumeCandidate(candidate, candidate.resumeLink || undefined)
+      if (!ignore) {
+        setAnalysis(result)
+        setStatus("ready")
+      }
+    }
+
+    runAnalysis()
+
+    return () => {
+      ignore = true
+    }
+  }, [candidate.id, candidate.resumeLink, errorKey])
+
+  const canShowPdf = Boolean(candidate.resumeLink)
+
   return (
-    <Card className="scroll-thin max-h-[820px] overflow-y-auto p-7 text-[12.8px] leading-[1.75] text-[#3a3f46]">
-      <h3 className="font-display text-base">
-        <RedactedName name={c.name} />
-      </h3>
-      {!processed ? (
-        <>
-          <div className="mb-3.5 text-[12.5px] text-muted">Application queued for AI screening</div>
-          <p className="text-[12.5px] text-muted">
-            This resume has been ingested and embedded into the retrieval index. It will be scored against REQ-1042
-            (Senior Backend Engineer) in the next screening batch.
-          </p>
-        </>
+    <Card className="flex min-h-[640px] flex-col overflow-hidden p-0 text-[12.8px] leading-[1.75] text-[#3a3f46]">
+      <div className="border-b border-line-2 px-5 py-4">
+        <h3 className="font-display text-base">
+          <RedactedName name={candidate.candidateName} />
+        </h3>
+        <div className="mt-1 text-[12.5px] text-muted">{candidate.appliedRole}</div>
+      </div>
+
+      {!canShowPdf ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center text-muted">
+          <AlertCircle className="h-6 w-6" aria-hidden />
+          <div>No resume is available for this application yet.</div>
+        </div>
+      ) : status === "loading" ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center text-muted">
+          <Hourglass className="h-6 w-6 animate-pulse" aria-hidden />
+          <div>Loading resume preview…</div>
+        </div>
+      ) : status === "error" ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center text-muted">
+          <AlertCircle className="h-6 w-6" aria-hidden />
+          <div>The resume preview could not be loaded.</div>
+          <button
+            type="button"
+            onClick={() => {
+              setErrorKey((value) => value + 1)
+              onRetry()
+            }}
+            className="rounded-lg border border-ai bg-ai px-3 py-2 text-[12.8px] font-semibold text-white"
+          >
+            Retry
+          </button>
+        </div>
       ) : (
-        <>
-          <div className="mb-3.5 text-[12.5px] text-muted">
-            {c.resume.title} · {c.resume.appliedFor}
-          </div>
-
-          <h4 className="mb-2 mt-[18px] border-b border-line-2 pb-1.5 font-display text-[11px] uppercase tracking-[0.06em] text-teal-deep">
-            Experience
-          </h4>
-          {c.resume.exp.map((e, i) => (
-            <div key={i} className="mb-3">
-              <div className="flex justify-between text-[12.8px] font-semibold">
-                <span className={e.org.startsWith("Redacted") ? "" : "redact-target"}>
-                  {e.title} · {e.org}
-                </span>
-                <span className="font-medium text-faint">{e.period}</span>
-              </div>
-              <ul className="list-disc pl-[18px]">
-                {e.bullets.map((b, j) => (
-                  <li key={j} className="mb-1.5">
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-
-          <h4 className="mb-2 mt-[18px] border-b border-line-2 pb-1.5 font-display text-[11px] uppercase tracking-[0.06em] text-teal-deep">
-            Education
-          </h4>
-          <ul className="list-disc pl-[18px]">
-            {c.resume.edu.map((e, i) => (
-              <li key={i} className="mb-1.5">
-                <RedactedName name={e.school} /> — {e.degree}, {e.year}
-              </li>
-            ))}
-          </ul>
-
-          <h4 className="mb-2 mt-[18px] border-b border-line-2 pb-1.5 font-display text-[11px] uppercase tracking-[0.06em] text-teal-deep">
-            Certifications
-          </h4>
-          <ul className="list-disc pl-[18px]">
-            {c.resume.certs.length ? (
-              c.resume.certs.map((x, i) => (
-                <li key={i} className="mb-1.5">
-                  {x}
-                </li>
-              ))
-            ) : (
-              <li className="text-faint">None listed</li>
-            )}
-          </ul>
-        </>
+        <ResumePdfViewer
+          resumeUrl={candidate.resumeLink}
+          onLoadSuccess={() => {
+            setStatus("ready")
+          }}
+          onLoadError={() => {
+            setStatus("error")
+            onRetry()
+          }}
+        />
       )}
+
+      <div className="border-t border-line-2 px-5 py-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-teal-deep">Local AI Snapshot</div>
+          <div className="flex gap-2">
+            {candidate.resumeLink ? (
+              <>
+                <a href={candidate.resumeLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-ai">
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  Open
+                </a>
+                <a href={candidate.resumeLink} download className="inline-flex items-center gap-1 text-[11px] font-semibold text-ai">
+                  <FileDown className="h-3.5 w-3.5" aria-hidden />
+                  Download
+                </a>
+              </>
+            ) : null}
+          </div>
+        </div>
+        <div className="space-y-2 text-[12.5px] text-muted">
+          <div><b>Summary:</b> {analysis.summary}</div>
+          <div><b>Recommendation:</b> {analysis.recommendation}</div>
+          <div><b>Score:</b> {analysis.score ?? "—"}/100</div>
+          <div><b>ATS compatibility:</b> {analysis.atsScore}/100</div>
+          <div><b>Keyword coverage:</b> {analysis.keywordCoverage}%</div>
+        </div>
+      </div>
     </Card>
   )
 }
@@ -137,11 +167,32 @@ function AnalysisPanel({
   c,
   onExport,
 }: {
-  c: Candidate
+  c: LiveCandidate
   onExport: () => void
 }) {
   const [notes, setNotes] = useState(c.notes)
   const [rerunLabel, setRerunLabel] = useState<"idle" | "running" | "done">("idle")
+  const [analysis, setAnalysis] = useState(() => buildFallbackAnalysis(c))
+
+  useEffect(() => {
+    setNotes(c.notes)
+    setAnalysis(buildFallbackAnalysis(c))
+
+    let ignore = false
+
+    async function loadAnalysis() {
+      const result = await analyzeResumeCandidate(c, c.resumeLink || undefined)
+      if (!ignore) {
+        setAnalysis(result)
+      }
+    }
+
+    loadAnalysis()
+
+    return () => {
+      ignore = true
+    }
+  }, [c.id, c.resumeLink, c.notes])
 
   function rerun() {
     setRerunLabel("running")
@@ -151,7 +202,7 @@ function AnalysisPanel({
     }, 1100)
   }
 
-  if (c.aiScore === null) {
+  if (analysis.score === null) {
     return (
       <Card className="flex flex-col items-center px-5 py-10 text-center">
         <Hourglass className="mb-2 h-7 w-7 text-muted" aria-hidden />
@@ -168,12 +219,12 @@ function AnalysisPanel({
       {/* AI recommendation card */}
       <Card className="p-5">
         <PanelHead title="AI Hiring Score">
-          <Badge tone={recommendationTone(c.recommendation)}>{c.recommendation}</Badge>
+          <Badge tone={recommendationTone(analysis.recommendation)}>{analysis.recommendation}</Badge>
         </PanelHead>
         <div className="flex items-center gap-[18px]">
-          <Gauge score={c.aiScore} />
+          <Gauge score={analysis.score} />
           <div className="flex-1 text-[12.5px] leading-relaxed text-muted">
-            <b className="text-foreground">Interview Recommendation:</b> {c.recommendation}. Score reflects weighted
+            <b className="text-foreground">Interview Recommendation:</b> {analysis.recommendation}. Score reflects weighted
             match across skills (40%), experience (30%), education (15%) and certifications (15%), per REQ-1042 rubric
             v3.
           </div>
@@ -183,7 +234,7 @@ function AnalysisPanel({
           <span>
             <b>AI Resume Summary</b>
             <br />
-            {c.summary}
+            {analysis.summary}
           </span>
         </div>
       </Card>
@@ -193,23 +244,23 @@ function AnalysisPanel({
         <PanelHead title="Match Breakdown">
           <BiasBadge bias={c.bias} />
         </PanelHead>
-        <MatchRow label="Skill Match" value={c.skillMatch ?? 0} color="var(--color-teal)" />
-        <MatchRow label="Experience Match" value={c.expMatch ?? 0} color="var(--color-ai)" />
-        <MatchRow label="Education Match" value={c.eduMatch ?? 0} color="var(--color-success)" />
-        <MatchRow label="Certification Match" value={c.certMatch ?? 0} color="var(--color-warn)" />
+        <MatchRow label="Skill Match" value={analysis.skillMatch ?? 0} color="var(--color-teal)" />
+        <MatchRow label="Experience Match" value={analysis.expMatch ?? 0} color="var(--color-ai)" />
+        <MatchRow label="Education Match" value={analysis.eduMatch ?? 0} color="var(--color-success)" />
+        <MatchRow label="Certification Match" value={analysis.certMatch ?? 0} color="var(--color-warn)" />
       </Card>
 
       {/* Skills matched vs missing */}
       <Card className="p-5">
         <PanelHead title="Skills — Matched vs. Missing" />
         <div className="flex flex-wrap gap-2">
-          {c.skills.have.map((s) => (
+          {analysis.matchedSkills.map((s) => (
             <span key={s} className="flex items-center gap-1 rounded-full bg-success-tint px-2.5 py-1 text-[11.5px] text-success">
               <Check className="h-3 w-3" aria-hidden />
               {s}
             </span>
           ))}
-          {c.skills.missing.map((s) => (
+          {analysis.missingSkills.map((s) => (
             <span key={s} className="flex items-center gap-1 rounded-full bg-danger-tint px-2.5 py-1 text-[11.5px] text-danger">
               <X className="h-3 w-3" aria-hidden />
               {s}
@@ -227,6 +278,51 @@ function AnalysisPanel({
           placeholder="Add context for the hiring panel…"
           className="min-h-[78px] w-full resize-y rounded-lg border border-line bg-[#fbfbfa] px-3 py-2.5 text-[12.5px] focus:border-teal focus:outline-none"
         />
+      </Card>
+
+      <Card className="p-5">
+        <PanelHead title="Resume Highlights" />
+        <ul className="space-y-2 text-[12.5px] text-muted">
+          {analysis.highlights.map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <Check className="mt-0.5 h-3.5 w-3.5 text-success" aria-hidden />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card className="p-5">
+        <PanelHead title="Strengths & Weaknesses" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-success">Strengths</div>
+            <ul className="space-y-1 text-[12.5px] text-muted">
+              {analysis.strengths.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-danger">Weaknesses</div>
+            <ul className="space-y-1 text-[12.5px] text-muted">
+              {analysis.weaknesses.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <PanelHead title="JD Match Signals" />
+        <div className="space-y-2 text-[12.5px] text-muted">
+          <div><b>Experience:</b> {analysis.experience}</div>
+          <div><b>Education:</b> {analysis.education}</div>
+          <div><b>JD match:</b> {analysis.jdMatch}%</div>
+          <div><b>ATS compatibility:</b> {analysis.atsScore}/100</div>
+          <div><b>Keyword coverage:</b> {analysis.keywordCoverage}%</div>
+        </div>
       </Card>
 
       <div className="flex flex-col gap-2.5 sm:flex-row">
@@ -262,37 +358,100 @@ export function ResumeViewerView({
   activeId,
   onSelect,
   onExport,
+  searchQuery,
+  statusFilter,
 }: {
   activeId: string
   onSelect: (id: string) => void
   onExport: (id: string) => void
+  searchQuery: string
+  statusFilter: string
 }) {
-  const active = candidates.find((c) => c.id === activeId) ?? candidates[0]
+  const [candidates, setCandidates] = useState<LiveCandidate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [retryKey, setRetryKey] = useState(0)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadCandidates() {
+      setLoading(true)
+
+      try {
+        const data = await getLiveCandidates()
+
+        if (!ignore) {
+          setCandidates(data)
+          setLoading(false)
+        }
+      } catch {
+        if (!ignore) {
+          setCandidates([])
+          setLoading(false)
+        }
+      }
+    }
+
+    loadCandidates()
+
+    return () => {
+      ignore = true
+    }
+  }, [retryKey])
+
+  const filteredCandidates = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return candidates.filter((candidate) => {
+      const matchesQuery = !query || candidate.candidateName.toLowerCase().includes(query) || candidate.appliedRole.toLowerCase().includes(query)
+      const matchesStatus = statusFilter === "all" || candidate.status === statusFilter
+      return matchesQuery && matchesStatus
+    })
+  }, [candidates, searchQuery, statusFilter])
+
+  const active = useMemo(() => {
+    if (!filteredCandidates.length) return null
+    return filteredCandidates.find((candidate) => candidate.id === activeId) ?? filteredCandidates[0]
+  }, [activeId, filteredCandidates])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-line bg-surface px-6 py-10 text-center text-muted">
+        Loading candidates…
+      </div>
+    )
+  }
+
+  if (!active) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-line bg-surface px-6 py-10 text-center text-muted">
+        No live candidates available yet.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
-      {/* candidate switch strip */}
       <div className="scroll-thin flex gap-2 overflow-x-auto pb-1">
-        {candidates.map((c) => (
+        {filteredCandidates.length ? filteredCandidates.map((candidate) => (
           <button
-            key={c.id}
+            key={candidate.id}
             type="button"
-            onClick={() => onSelect(c.id)}
+            onClick={() => onSelect(candidate.id)}
             className={`flex flex-shrink-0 items-center gap-2 rounded-xl border bg-surface py-1.5 pl-1.5 pr-3 text-[12.5px] transition ${
-              c.id === active.id ? "border-ink shadow-[0_0_0_1px_var(--color-ink)]" : "border-line"
+              candidate.id === active.id ? "border-ink shadow-[0_0_0_1px_var(--color-ink)]" : "border-line"
             }`}
           >
-            <Avatar initials={c.initials} className="h-[26px] w-[26px] text-[10.5px]" />
+            <Avatar initials={candidate.initials} className="h-[26px] w-[26px] text-[10.5px]" />
             <div className="text-left">
-              <RedactedName name={c.name} />
-              <div className="text-[10px] text-faint">{c.stage}</div>
+              <RedactedName name={candidate.candidateName} />
+              <div className="text-[10px] text-faint">{candidate.status}</div>
             </div>
           </button>
-        ))}
+        )) : <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted">No candidates match the current filters.</div>}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.15fr]">
-        <ResumeDoc c={active} />
+        <ResumeDoc candidate={active} onRetry={() => setRetryKey((value) => value + 1)} />
         <AnalysisPanel c={active} onExport={() => onExport(active.id)} />
       </div>
     </div>

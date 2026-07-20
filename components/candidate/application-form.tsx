@@ -5,8 +5,8 @@ import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useDropzone } from "react-dropzone"
 import { CheckCircle2, File, Loader2, UploadCloud, X } from "lucide-react"
-import { z } from "zod"
 
+import { submitApplicationAction } from "@/actions/submit-application.action"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ export function ApplicationForm() {
   const [applicationId, setApplicationId] = useState("")
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
+  const [submissionError, setSubmissionError] = useState<string | null>(null)
 
   const {
     register,
@@ -80,11 +81,28 @@ export function ApplicationForm() {
 
   const onSubmit = async (data: ApplicationFormValues) => {
     setIsSubmitting(true)
+    setSubmissionError(null)
 
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const formData = new FormData()
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        if (key === "resume") {
+          formData.append(key, value as File)
+        } else {
+          formData.append(key, value.toString())
+        }
+      }
+    })
 
-    const generatedId = `APP-${Math.floor(100000 + Math.random() * 900000)}`
-    setApplicationId(generatedId)
+    const result = await submitApplicationAction(formData)
+
+    if (!result.success) {
+      setSubmissionError(result.error || "Failed to submit application.")
+      setIsSubmitting(false)
+      return
+    }
+
+    setApplicationId(`APP-${result.applicationId}`)
     setIsSuccess(true)
     setIsSubmitting(false)
   }
@@ -291,6 +309,7 @@ export function ApplicationForm() {
           </div>
 
           <div className="pt-4">
+            {submissionError && <p className="mb-4 text-center text-sm font-medium text-destructive">{submissionError}</p>}
             <Button type="submit" className="w-full" disabled={isSubmitting || isUploading}>
               {isSubmitting ? (
                 <>

@@ -1,8 +1,21 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { CalendarClock, MessageSquareText, Sparkles } from "lucide-react"
-import { interviewSchedule, type InterviewSlot } from "@/lib/data"
 import { Badge, Card, PanelHead } from "@/components/ui-bits"
+import { getLiveCandidates } from "@/src/actions/get-candidates.action"
+import type { LiveCandidate } from "@/src/lib/live-candidate"
+
+type InterviewSlot = {
+  id: string
+  candidate: string
+  role: string
+  time: string
+  round: string
+  panel: string
+  status: "Booked" | "Prep" | "Pending" | "High Priority"
+  notes: string
+}
 
 const statusTone: Record<InterviewSlot["status"], "ai" | "success" | "warn" | "danger" | "neutral"> = {
   Booked: "success",
@@ -15,12 +28,46 @@ function StatusBadge({ status }: { status: InterviewSlot["status"] }) {
   return <Badge tone={statusTone[status]}>{status}</Badge>
 }
 
-export function InterviewPlanningView() {
+export function InterviewPlanningView({ searchQuery, statusFilter }: { searchQuery: string; statusFilter: string }) {
+  const [candidates, setCandidates] = useState<LiveCandidate[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const data = await getLiveCandidates()
+      setCandidates(data)
+      setLoading(false)
+    }
+
+    load()
+  }, [])
+
+  const schedule = useMemo<InterviewSlot[]>(() => {
+    const query = searchQuery.trim().toLowerCase()
+    const visibleCandidates = candidates.filter((candidate) => {
+      const matchesQuery = !query || candidate.candidateName.toLowerCase().includes(query) || candidate.appliedRole.toLowerCase().includes(query)
+      const matchesStatus = statusFilter === "all" || candidate.status === statusFilter
+      return matchesQuery && matchesStatus
+    })
+
+    return visibleCandidates.slice(0, 4).map((candidate, index) => ({
+      id: candidate.id,
+      candidate: candidate.candidateName,
+      role: candidate.appliedRole,
+      time: index === 0 ? "Today · 2:00 PM" : index === 1 ? "Tomorrow · 11:30 AM" : index === 2 ? "Thursday · 4:15 PM" : "Friday · 9:00 AM",
+      round: index === 0 ? "Panel Interview" : index === 1 ? "Technical Screen" : index === 2 ? "Hiring Panel" : "Offer Alignment",
+      panel: index === 0 ? "Engineering + Hiring Manager" : index === 1 ? "Principal Engineer" : index === 2 ? "Recruiter + Engineering Lead" : "Talent + Finance",
+      status: index === 2 ? "High Priority" : index === 3 ? "Pending" : "Booked",
+      notes: candidate.summary,
+    }))
+  }, [candidates])
+
   return (
     <div className="space-y-4">
       <Card className="p-5">
         <PanelHead title="Upcoming interview cadence">
-          <Badge tone="ai">4 sessions this week</Badge>
+          <Badge tone="ai">{schedule.length} sessions this week</Badge>
         </PanelHead>
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-2xl border border-line bg-line-2/60 p-4">
@@ -31,15 +78,14 @@ export function InterviewPlanningView() {
               <div>
                 <div className="font-display text-[13px] font-semibold">Panel readiness snapshot</div>
                 <div className="mt-1 text-[12px] leading-relaxed text-muted">
-                  Two interviews are already confirmed, one is awaiting recruiter sign-off, and one is waiting for the
-                  compensation package to be finalized.
+                  Live candidate applications are now surfaced here so interview planning stays aligned with the latest pipeline changes.
                 </div>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Badge tone="success">2 confirmed</Badge>
-              <Badge tone="warn">1 high priority</Badge>
-              <Badge tone="neutral">1 pending prep</Badge>
+              <Badge tone="success">{schedule.filter((slot) => slot.status === "Booked").length} confirmed</Badge>
+              <Badge tone="warn">{schedule.filter((slot) => slot.status === "High Priority").length} high priority</Badge>
+              <Badge tone="neutral">{schedule.filter((slot) => slot.status === "Pending").length} pending prep</Badge>
             </div>
           </div>
 
@@ -51,8 +97,7 @@ export function InterviewPlanningView() {
               <div>
                 <div className="font-display text-[13px] font-semibold">Prep notes to send</div>
                 <div className="mt-1 text-[12px] leading-relaxed text-muted">
-                  Share role-specific evaluation prompts, the interview rubric, and any candidate-specific follow-up areas
-                  before the panel convenes.
+                  Candidate-specific follow-up areas and score summaries are surfaced directly from the latest application data.
                 </div>
               </div>
             </div>
@@ -67,11 +112,8 @@ export function InterviewPlanningView() {
           <span>Round</span>
           <span>Status</span>
         </div>
-        {interviewSchedule.map((slot) => (
-          <div
-            key={slot.id}
-            className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.8fr] items-start gap-3 border-b border-line-2 px-5 py-3 text-[12.5px] last:border-none"
-          >
+        {loading ? <div className="px-5 py-4 text-sm text-muted">Loading interviews…</div> : schedule.map((slot) => (
+          <div key={slot.id} className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.8fr] items-start gap-3 border-b border-line-2 px-5 py-3 text-[12.5px] last:border-none">
             <div>
               <div className="font-semibold">{slot.candidate}</div>
               <div className="mt-0.5 text-[11px] text-muted">{slot.role}</div>

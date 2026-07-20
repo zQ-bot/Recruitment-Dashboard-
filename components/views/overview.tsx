@@ -1,8 +1,12 @@
+
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { ClipboardList, BrainCircuit, Timer, Scale, ArrowUp, ArrowDown, Sparkles } from "lucide-react"
-import { candidates, scoreTone } from "@/lib/data"
-import { Avatar, Badge, BiasBadge, Card, RedactedName, ScorePill } from "@/components/ui-bits"
+import { scoreTone } from "@/lib/data"
+import { Avatar, Badge, Card, RedactedName, ScorePill } from "@/components/ui-bits"
+import { getLiveCandidates } from "@/src/actions/get-candidates.action"
+import type { LiveCandidate } from "@/src/lib/live-candidate"
 
 type KpiTone = "teal" | "ai" | "success" | "warn"
 
@@ -13,27 +17,18 @@ const kpiIconClasses: Record<KpiTone, string> = {
   warn: "bg-warn-tint text-warn",
 }
 
-const kpis: {
+const kpiBase: {
   tone: KpiTone
   icon: typeof ClipboardList
   label: string
-  value: string
-  unit?: string
   delta: string
   deltaDir: "up" | "down" | "flat"
+  unit?: string
 }[] = [
-  { tone: "teal", icon: ClipboardList, label: "Open Requisitions", value: "18", delta: "12", deltaDir: "up" },
-  { tone: "ai", icon: BrainCircuit, label: "Resumes AI-Screened (7d)", value: "642", delta: "34%", deltaDir: "up" },
-  { tone: "success", icon: Timer, label: "Avg. Time to Screen", value: "4.2", unit: "min", delta: "71%", deltaDir: "down" },
-  { tone: "warn", icon: Scale, label: "Bias Reviews Flagged", value: "3", delta: "3 open", deltaDir: "flat" },
-]
-
-const funnel = [
-  { label: "Applied", n: 248, h: 100 },
-  { label: "AI Screened", n: 248, h: 96 },
-  { label: "Shortlisted", n: 61, h: 52 },
-  { label: "Interview", n: 19, h: 28 },
-  { label: "Offer", n: 4, h: 12 },
+  { tone: "teal", icon: ClipboardList, label: "Open Requisitions", delta: "Live", deltaDir: "up" },
+  { tone: "ai", icon: BrainCircuit, label: "Live Applications", delta: "Fresh", deltaDir: "up" },
+  { tone: "success", icon: Timer, label: "Shortlisted", delta: "Ready", deltaDir: "down" },
+  { tone: "warn", icon: Scale, label: "Need Review", delta: "Open", deltaDir: "flat" },
 ]
 
 function DeltaChip({ dir, value }: { dir: "up" | "down" | "flat"; value: string }) {
@@ -54,11 +49,64 @@ function DeltaChip({ dir, value }: { dir: "up" | "down" | "flat"; value: string 
   )
 }
 
-export function OverviewView({ onOpenCandidate }: { onOpenCandidate: (id: string) => void }) {
-  const ranked = candidates
-    .filter((c) => c.aiScore !== null)
+
+export function OverviewView({
+  onOpenCandidate,
+  searchQuery,
+  statusFilter,
+}: {
+  onOpenCandidate: (id: string) => void
+  searchQuery: string
+  statusFilter: string
+}) {
+  const [liveCandidates, setLiveCandidates] = useState<LiveCandidate[]>([])
+
+  useEffect(() => {
+    async function loadCandidates() {
+      const data = await getLiveCandidates()
+      setLiveCandidates(data)
+    }
+
+    loadCandidates()
+  }, [])
+
+  const filteredCandidates = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return liveCandidates.filter((candidate) => {
+      const matchesQuery =
+        !query ||
+        candidate.candidateName.toLowerCase().includes(query) ||
+        candidate.appliedRole.toLowerCase().includes(query) ||
+        candidate.status.toLowerCase().includes(query)
+      const matchesStatus = statusFilter === "all" || candidate.status === statusFilter
+      return matchesQuery && matchesStatus
+    })
+  }, [liveCandidates, searchQuery, statusFilter])
+
+  const ranked = [...filteredCandidates]
     .sort((a, b) => (b.aiScore ?? 0) - (a.aiScore ?? 0))
     .slice(0, 5)
+
+  const funnel = [
+    { label: "Applied", n: filteredCandidates.filter((candidate) => candidate.status === "Applied").length, h: 100 },
+    { label: "AI Screened", n: filteredCandidates.filter((candidate) => candidate.status === "AI Screened").length, h: 88 },
+    { label: "Shortlisted", n: filteredCandidates.filter((candidate) => candidate.status === "Shortlisted").length, h: 62 },
+    { label: "Interview", n: filteredCandidates.filter((candidate) => candidate.status === "Interview").length, h: 38 },
+    { label: "Offer", n: filteredCandidates.filter((candidate) => candidate.status === "Offer").length, h: 16 },
+  ]
+
+  const kpis = useMemo(() => {
+    const openRequisitions = new Set(filteredCandidates.map((candidate) => candidate.appliedRole)).size
+    const shortlisted = filteredCandidates.filter((candidate) => candidate.status === "Shortlisted").length
+    const review = filteredCandidates.filter((candidate) => candidate.status === "Applied" || candidate.status === "AI Screened").length
+
+    return [
+      { ...kpiBase[0], value: String(openRequisitions || filteredCandidates.length || 0) },
+      { ...kpiBase[1], value: String(filteredCandidates.length) },
+      { ...kpiBase[2], value: String(shortlisted), unit: "candidates" },
+      { ...kpiBase[3], value: String(review), unit: "review" },
+    ]
+  }, [filteredCandidates])
 
   return (
     <div className="space-y-6">
@@ -91,7 +139,7 @@ export function OverviewView({ onOpenCandidate }: { onOpenCandidate: (id: string
             <h4 className="font-display text-[13px] font-semibold">
               Hiring Funnel — Senior Backend Engineer (REQ-1042)
             </h4>
-            <Badge tone="neutral">248 candidates</Badge>
+            <Badge tone="neutral">{filteredCandidates.length} candidates</Badge>
           </div>
           <div className="flex h-[150px] items-end gap-2.5 pt-2.5">
             {funnel.map((f) => (
@@ -108,8 +156,7 @@ export function OverviewView({ onOpenCandidate }: { onOpenCandidate: (id: string
           <div className="mt-3 flex items-start gap-2 rounded-[10px] bg-ai-tint px-3 py-2.5 text-[11.5px] leading-relaxed text-[#3f41a8]">
             <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden />
             <span>
-              <b>AI note</b> — grounded in REQ-1042 JD &amp; L5 leveling rubric: screen-to-shortlist ratio (24.6%) is
-              consistent with the 90-day rolling baseline for this role family; no anomaly detected.
+              <b>AI note</b> — grounded in the live pipeline data for REQ-1042, the current funnel shows the latest application mix and stage movement without manual overrides.
             </span>
           </div>
         </Card>
@@ -117,19 +164,19 @@ export function OverviewView({ onOpenCandidate }: { onOpenCandidate: (id: string
         <Card className="p-5">
           <h4 className="mb-3 font-display text-[13px] font-semibold">Top-Ranked Candidates Today</h4>
           <div>
-            {ranked.map((c, i) => (
-              <div key={c.id} className="flex items-center gap-3 border-b border-line-2 py-2.5 last:border-none">
+            {ranked.length ? ranked.map((candidate, i) => (
+              <div key={candidate.id} className="flex items-center gap-3 border-b border-line-2 py-2.5 last:border-none">
                 <div className="w-[22px] font-mono text-[12.5px] text-faint">{i + 1}</div>
-                <Avatar initials={c.initials} className="h-8 w-8 text-xs" />
+                <Avatar initials={candidate.initials} className="h-8 w-8 text-xs" />
                 <div className="min-w-0 flex-1">
                   <div className="text-[12.8px] font-semibold">
-                    <RedactedName name={c.name} />
+                    <RedactedName name={candidate.candidateName} />
                   </div>
-                  <div className="text-[11px] text-muted">{c.role}</div>
+                  <div className="text-[11px] text-muted">{candidate.appliedRole}</div>
                 </div>
-                <ScorePill score={c.aiScore} tone={scoreTone(c.aiScore)} />
+                <ScorePill score={candidate.aiScore} tone={scoreTone(candidate.aiScore)} />
               </div>
-            ))}
+            )) : <div className="text-sm text-muted">No candidates match the current search.</div>}
           </div>
         </Card>
       </div>
@@ -143,34 +190,30 @@ export function OverviewView({ onOpenCandidate }: { onOpenCandidate: (id: string
         <Card className="overflow-hidden">
           <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-line-2 px-5 py-3 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-faint sm:grid-cols-[1fr_120px_60px]">
             <span>Candidate</span>
-            <span className="hidden sm:block">Bias</span>
-            <span className="text-right">Score</span>
+            <span className="hidden sm:block">Status</span>
+            <span className="text-right">Applied</span>
           </div>
-          {candidates.map((c) => (
+          {filteredCandidates.length ? filteredCandidates.map((candidate) => (
             <button
-              key={c.id}
+              key={candidate.id}
               type="button"
-              onClick={() => onOpenCandidate(c.id)}
-              className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-line-2 px-5 py-3 text-left transition-colors last:border-none hover:bg-line-2/40 sm:grid-cols-[1fr_120px_60px]"
+              onClick={() => onOpenCandidate(candidate.id)}
+              className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-line-2 px-5 py-3 text-left last:border-none sm:grid-cols-[1fr_120px_60px]"
             >
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar initials={c.initials} className="h-8 w-8 text-xs" />
-                <div className="min-w-0">
-                  <div className="truncate text-[12.8px] font-semibold">
-                    <RedactedName name={c.name} />
-                    <span className="ml-1 text-[11px] font-normal text-faint">· {c.id}</span>
-                  </div>
-                  <div className="truncate text-[11px] text-muted">
-                    {c.role} · {c.stage}
-                  </div>
-                </div>
+              <div className="min-w-0">
+                <div className="truncate text-[12.8px] font-semibold">{candidate.candidateName}</div>
+                <div className="truncate text-[11px] text-muted">{candidate.appliedRole}</div>
               </div>
+
               <div className="hidden sm:block">
-                <BiasBadge bias={c.bias} />
+                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700">{candidate.status}</span>
               </div>
-              <ScorePill score={c.aiScore} tone={scoreTone(c.aiScore)} className="min-w-[34px] justify-self-end" />
+
+              <div className="justify-self-end text-xs text-muted">
+                {new Date(candidate.applicationDate).toLocaleDateString()}
+              </div>
             </button>
-          ))}
+          )) : <div className="px-5 py-4 text-sm text-muted">No live candidates match the current filters.</div>}
         </Card>
       </div>
     </div>

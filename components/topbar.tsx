@@ -9,11 +9,19 @@ export function Topbar({
   blindMode,
   onToggleBlind,
   onOpenMenu,
+  searchValue,
+  onSearchChange,
+  statusFilter,
+  onStatusFilterChange,
 }: {
   view: ViewId
   blindMode: boolean
   onToggleBlind: () => void
   onOpenMenu: () => void
+  searchValue: string
+  onSearchChange: (value: string) => void
+  statusFilter: string
+  onStatusFilterChange: (value: string) => void
 }) {
   const meta = viewMeta[view]
   return (
@@ -34,14 +42,28 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-3.5">
-        <label className="hidden items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-faint xl:flex">
+        <div className="hidden items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-faint xl:flex">
           <Search className="h-4 w-4" aria-hidden />
           <input
             type="search"
+            value={searchValue}
+            onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search candidates, roles, req IDs…"
             className="w-[200px] bg-transparent text-foreground placeholder:text-faint focus:outline-none"
           />
-        </label>
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(event) => onStatusFilterChange(event.target.value)}
+          className="hidden rounded-lg border border-line bg-surface px-2.5 py-2 text-[12.5px] text-foreground xl:block"
+        >
+          <option value="all">All stages</option>
+          <option value="Applied">Applied</option>
+          <option value="AI Screened">AI Screened</option>
+          <option value="Shortlisted">Shortlisted</option>
+          <option value="Interview">Interview</option>
+          <option value="Offer">Offer</option>
+        </select>
 
         <div className="flex items-center gap-2.5 rounded-xl border border-line bg-surface py-1.5 pl-3.5 pr-2 shadow-[0_1px_2px_rgba(18,22,28,0.06)]">
           <div className="hidden flex-col leading-tight sm:flex">
