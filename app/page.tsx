@@ -10,6 +10,7 @@ import { PipelineView } from "@/components/views/pipeline"
 import { ResumeViewerView } from "@/components/views/resume-viewer"
 import { AnalyticsView } from "@/components/views/analytics"
 import { BiasView } from "@/components/views/bias"
+import { InterviewPlanningView } from "@/components/views/interviews"
 import { ExportModal } from "@/components/export-modal"
 
 export default function Page() {
@@ -64,6 +65,7 @@ export default function Page() {
           {view === "viewer" && (
             <ResumeViewerView activeId={activeCandidate} onSelect={setActiveCandidate} onExport={setExportId} />
           )}
+          {view === "interviews" && <InterviewPlanningView />}
           {view === "analytics" && <AnalyticsView />}
           {view === "bias" && <BiasView onOpenCandidate={openCandidate} />}
         </div>

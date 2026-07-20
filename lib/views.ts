@@ -1,4 +1,4 @@
-export type ViewId = "overview" | "pipeline" | "viewer" | "analytics" | "bias"
+export type ViewId = "overview" | "pipeline" | "viewer" | "analytics" | "bias" | "interviews"
 
 export const viewMeta: Record<ViewId, { title: string; subtitle: string }> = {
   overview: {
@@ -20,5 +20,9 @@ export const viewMeta: Record<ViewId, { title: string; subtitle: string }> = {
   bias: {
     title: "Bias & Fairness",
     subtitle: "Guardrails, flags and audit trail for responsible AI screening",
+  },
+  interviews: {
+    title: "Interview Planning",
+    subtitle: "Panel schedules, prep notes and priority follow-ups",
   },
 }

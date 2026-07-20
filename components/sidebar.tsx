@@ -1,12 +1,13 @@
 "use client"
 
-import { LayoutGrid, ListFilter, FileText, BarChart3, ShieldCheck } from "lucide-react"
+import { LayoutGrid, ListFilter, FileText, BarChart3, ShieldCheck, CalendarDays } from "lucide-react"
 import type { ViewId } from "@/lib/views"
 
 const workspace: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Dashboard Overview", icon: LayoutGrid },
   { id: "pipeline", label: "Candidate Pipeline", icon: ListFilter },
   { id: "viewer", label: "Resume Viewer & AI Score", icon: FileText },
+  { id: "interviews", label: "Interview Planning", icon: CalendarDays },
   { id: "analytics", label: "Analytics Dashboard", icon: BarChart3 },
 ]
 

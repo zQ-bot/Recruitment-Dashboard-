@@ -263,6 +263,60 @@ export const candidates: Candidate[] = [
   },
 ]
 
+export interface InterviewSlot {
+  id: string
+  candidate: string
+  role: string
+  time: string
+  round: string
+  panel: string
+  status: "Booked" | "Prep" | "Pending" | "High Priority"
+  notes: string
+}
+
+export const interviewSchedule: InterviewSlot[] = [
+  {
+    id: "INT-201",
+    candidate: "Priya Nandakumar",
+    role: "Senior Backend Engineer",
+    time: "Today · 2:00 PM",
+    round: "Panel Interview",
+    panel: "Engineering + Hiring Manager",
+    status: "Booked",
+    notes: "Prepare a systems-design follow-up around event streaming resilience.",
+  },
+  {
+    id: "INT-202",
+    candidate: "Daniel Okafor",
+    role: "Senior Backend Engineer",
+    time: "Tomorrow · 11:30 AM",
+    round: "Technical Screen",
+    panel: "Principal Engineer",
+    status: "Prep",
+    notes: "Confirm schema design examples and cross-team collaboration evidence.",
+  },
+  {
+    id: "INT-203",
+    candidate: "Mei Lin Tan",
+    role: "Senior Backend Engineer",
+    time: "Thursday · 4:15 PM",
+    round: "Hiring Panel",
+    panel: "Recruiter + Engineering Lead",
+    status: "High Priority",
+    notes: "Bias review requires recruiter sign-off before the panel proceeds.",
+  },
+  {
+    id: "INT-204",
+    candidate: "James Whitfield",
+    role: "Senior Backend Engineer",
+    time: "Friday · 9:00 AM",
+    round: "Offer Alignment",
+    panel: "Talent + Finance",
+    status: "Pending",
+    notes: "Share compensation framework and relocation checklist before the call.",
+  },
+]
+
 export type ScoreTone = "success" | "warn" | "danger" | "neutral"
 
 export function scoreTone(score: number | null): ScoreTone {
