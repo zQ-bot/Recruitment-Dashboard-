@@ -47,6 +47,47 @@ export function BiasBadge({ bias, compact = false }: { bias: Bias; compact?: boo
   )
 }
 
+export function BiasIndicator({ bias }: { bias: Bias }) {
+  const isReview = bias === "review"
+  const config = isReview
+    ? {
+        wrap: "border-warn/30 bg-warn-tint",
+        dot: "bg-warn",
+        text: "text-warn",
+        Icon: Scale,
+        label: "Bias review",
+        detail: "Fairness check pending",
+      }
+    : {
+        wrap: "border-success/25 bg-success-tint",
+        dot: "bg-success",
+        text: "text-success",
+        Icon: ShieldCheck,
+        label: "Bias cleared",
+        detail: "No adverse impact",
+      }
+  const { Icon } = config
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 ${config.wrap}`}
+      role="status"
+      aria-label={`Bias indicator: ${config.label}. ${config.detail}.`}
+    >
+      <span className={`relative flex h-1.5 w-1.5 flex-shrink-0 ${config.text}`} aria-hidden>
+        {isReview && (
+          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${config.dot}`} />
+        )}
+        <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${config.dot}`} />
+      </span>
+      <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${config.text}`} aria-hidden />
+      <div className="min-w-0 leading-tight">
+        <div className={`text-[11px] font-semibold ${config.text}`}>{config.label}</div>
+        <div className="truncate text-[10px] text-muted">{config.detail}</div>
+      </div>
+    </div>
+  )
+}
+
 export function Avatar({
   initials,
   className = "",
